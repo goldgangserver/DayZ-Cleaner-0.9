@@ -1,0 +1,89 @@
+This script is essentially an **automated banning tool** for a DayZ game server hosted on Nitrado, and here’s how it works step-by-step:
+
+---
+
+### **1. What it’s for**
+
+* It monitors **DayZ ADM log files** stored on your game server via FTP.
+* It detects when players with certain flagged **Unique IDs (UIDs)** connect.
+* If a flagged UID is detected, it automatically sends a **ban request** to Nitrado’s API to block that player’s gamertag.
+
+---
+
+### **2. Core components**
+
+#### **FTP connection**
+
+* Connects to the server’s FTP (`connect_ftp()`).
+* Finds the latest ADM log file (`get_latest_adm()`).
+* Reads new lines added to the ADM log (`read_new_lines()`).
+
+#### **Log scanning**
+
+* Uses a **regex pattern** (`adm_pattern`) to find lines that look like:
+
+  ```
+  Player "SomeGamertag"(id=ABC123XYZ) is connected
+  ```
+
+  * Captures the gamertag and the UID.
+
+#### **Flaglist system**
+
+* `flaglist.txt` stores the UIDs that should be banned if they join.
+* The script loads (`load_flaglist()`) and updates (`save_flaglist()`) this list.
+* You can add/remove UIDs from this file via the menu.
+
+#### **Ban execution**
+
+* If a flagged UID is detected in the log, the matching gamertag is sent to Nitrado’s banlist API (`ban_gamertags()`).
+* Keeps track of gamertags already banned (`banned_gamertags`) to avoid repeat API calls.
+
+---
+
+### **3. The monitoring loop (`monitor()`)**
+
+1. Connect to FTP.
+2. Identify the newest ADM log.
+3. Every 10 seconds:
+
+   * Check if the server started a new log file (new game session).
+   * Read any new lines added since last check.
+   * Look for matches to `adm_pattern`.
+   * If a match’s UID is in the flaglist → queue the gamertag for banning.
+4. Send ban requests to Nitrado via `requests.post()`.
+
+---
+
+### **4. The interactive menu (`menu()`)**
+
+When you run the script, you get:
+
+```
+1. Start monitoring and auto-ban
+2. Show banned gamertags
+3. Show/edit flaglist
+4. Exit
+```
+
+* **Option 1**: Starts the monitoring loop and auto-bans flagged players.
+* **Option 2**: Displays all gamertags that have been banned in this session.
+* **Option 3**: Lets you add/remove UIDs from the flaglist.
+* **Option 4**: Quits the program.
+
+---
+
+### **5. Key behaviors**
+
+* **Resilience**: If FTP fails, it retries every 10 seconds.
+* **Efficiency**: Reads only new log lines (not the entire file each time).
+* **Avoids duplicate bans**: Tracks banned gamertags in memory.
+* **Manual control**: Lets you update the flaglist without editing files directly.
+
+---
+
+### **6. Risks & security notes**
+
+* Your **FTP credentials** and **Nitrado API token** are hardcoded — anyone with access to this script could control your server.
+* If Nitrado’s API changes or rate-limits requests, the banning could fail.
+* Misuse (wrong UIDs in the flaglist) could result in banning innocent players instantly.
